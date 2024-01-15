@@ -1,20 +1,26 @@
 import requests
+import logging
+import os
 
-# Your GitHub personal access token with the required scopes
-GITHUB_TOKEN = '<github_token_goes_here>'
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
-# Headers for authentication
-headers = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept": "application/vnd.github.v3+json",
-}
+# Your GitHub personal access token with the required scopes, fetched from environment variables
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
-# Source and target organizations
-source_org = '<source-org>'
-target_org = '<target-org>'
+# Source and target organizations, fetched from environment variables
+source_org = os.getenv('SOURCE_ORG')
+target_org = os.getenv('TARGET_ORG')
 
 # API URL
 api_url = "https://api.github.com/repos"
+
+# Create a session
+session = requests.Session()
+session.headers.update({
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json",
+})
 
 # Read the list of repositories from the file
 with open('repos_to_transfer.txt', 'r') as file:
@@ -22,22 +28,19 @@ with open('repos_to_transfer.txt', 'r') as file:
 
 # Transfer each repository
 for repo in repositories:
-    # Set up the API endpoint
     transfer_url = f"{api_url}/{source_org}/{repo}/transfer"
+    data = {"new_owner": target_org, "team_ids": []}
 
-    # Set up the data payload
-    data = {
-        "new_owner": target_org,
-        "team_ids": []  # Specify team IDs if required
-    }
+    try:
+        response = session.post(transfer_url, json=data)
 
-    # Make the POST request to transfer the repository
-    response = requests.post(transfer_url, headers=headers, json=data)
+        if response.ok:
+            logging.info(f"Transfer initiated for {repo}")
+        else:
+            logging.error(f"Failed to initiate transfer for {repo}: {response.text}")
 
-    # Check if the transfer was successful
-    if response.status_code == 202:
-        print(f"Transfer initiated for {repo}")
-    else:
-        print(f"Failed to initiate transfer for {repo}: {response.content}")
+    except requests.RequestException as e:
+        logging.error(f"Network error during transfer of {repo}: {e}")
 
-# End of the script
+# Close the session
+session.close()
